@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1">
+		<title>Setting Page</title>
+	</head>
+	<body>
+		<form action="/setinfo.html" method="post">
+			<p>
+				地域
+				<select name="region">
+					<option value="Tokyo">東京</option>
+					<option value="Nagoya">名古屋</option>
+					<option value="Osaka">大阪</option>
+				</select>
+			</p>
+			<p>
+				予報時間
+				<select name="time">
+					<option value="0">0</option>
+					<option value="3">3</option>
+					<option value="6">6</option>
+					<option value="9">9</option>
+					<option value="12">12</option>
+					<option value="15">15</option>
+				</select>
+				時間後の天気を表示
+			</p>
+			<br>
+			<input type="submit" value="送信">
+		</form>
+	</body>
+</html>

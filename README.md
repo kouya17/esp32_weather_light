@@ -8,3 +8,11 @@ Use weather API : <a href="https://openweathermap.org/">https://openweathermap.o
 ## Prepare
 - <a href="https://www.switch-science.com/catalog/3210/">ESPr® Developer 32</a>
 - LEDs
+
+## Pin assignment
+IO25 : white led  
+IO26 : red led  
+IO23 : blue led  
+IO4 : green led
+
+## How to use

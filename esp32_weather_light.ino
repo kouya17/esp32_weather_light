@@ -1,16 +1,11 @@
 #include "FS.h"
 #include <SPIFFS.h>
-#include "SimpleWebServer.h"   // webサーバ用ライブラリ(機能esp02ほぼ同等)
-#include <map>                 // map型を使用するため
-#include <Preferences.h>      // 不揮発領域管理用ライブラリ
+#include "SimpleWebServer.h"    // webサーバ用ライブラリ(機能esp02ほぼ同等)
+#include <map>                  // map型を使用するため
+#include <Preferences.h>        // 不揮発領域管理用ライブラリ
+#include <cstdlib>
 
-// メイン状態変数
-/*
-#define MAIN_STATE_NONE     0
-#define MAIN_STATE_SETTING  1
-#define MAIN_STATE_INFORM   2
-#define MAIN_STATE_DEFAULT  MAIN_STATE_INFORM
-*/
+#define COUNT_FLASH_WEATHER 3600      // 天気を取ってくる間隔
 #define DELAY_MAIN_LOOP     1000      // メインloopの実行間隔[ms]
 #define MAX_TRY_CONNECT       50      // 最大WiFi接続試行回数
 #define MAX_TRY_CONNECT_INI   10      // 最大WiFi接続試行回数(初期接続)
@@ -31,16 +26,18 @@ SimpleWebServer server("ESP32AP", "12345678", IPAddress(192, 168, 4, 1), IPAddre
 Preferences preferences;
 
 // htmlデータ
-uint8_t root_html[16384];         // /index.html
-uint8_t success_html[16384];      // /success.html
-uint8_t access_html[16384];      // /success.html
-uint8_t setinfo_html[16384];      // /success.html
-  
+uint8_t root_html[16384];          // /index.html
+uint8_t success_html[16384];       // /success.html
+uint8_t access_html[16384];        // /success.html
+uint8_t setinfo_html[16384];       // /success.html
+
+String city = "Tokyo";                              // 都市を選択
+int time_number_inform_weather = 0;                 // 何時間後の天気を通知するか
+
+// 天気情報通知間隔設定用変数
+int count_for_inform_weather = COUNT_FLASH_WEATHER;
+
 void setup(){
-  //const char* access_ssid      = "4CE676F828AC_G";              // 無線接続先のssid
-  //const char* access_password  = "upvx5vphstsmw";               // 無線接続先のパスワード
-  //const char* access_ssid            = "航也 の iPhone";
-  //const char* access_password        = "suradann0";
   int connect_try_count = 0;
   
   // シリアルポート開放
@@ -58,14 +55,23 @@ void setup(){
   digitalWrite(PIN_LED_GREEN, LOW);
 
   // 不揮発性領域へのアクセス開始
-  preferences.begin("ssid", false);
-  preferences.begin("pass", false);
+  preferences.begin("ssid_1", false);
+  preferences.begin("pass_1", false);
+  preferences.begin("ssid_2", false);
+  preferences.begin("pass_2", false);
+  preferences.begin("num_saved_id", false);
 
   // webサーバ設定処理
   set_server();
 
   // 一度記憶情報を用いてWiFi接続を試みる
-  WiFi.begin(preferences.getString("ssid", "").c_str(), preferences.getString("pass", "").c_str());
+  Serial.print("num_saved_id = ");
+  Serial.println(preferences.getInt("num_saved_id", 0));
+  Serial.print("ssid_1 = ");
+  Serial.print(preferences.getString("ssid_1", ""));
+  Serial.print(", pass1 = ");
+  Serial.println(preferences.getString("pass_1", ""));
+  WiFi.begin(preferences.getString("ssid_1", "").c_str(), preferences.getString("pass_1", "").c_str());
 
   while (WiFi.status() != WL_CONNECTED && connect_try_count < MAX_TRY_CONNECT_INI) {
     delay(500);
@@ -78,33 +84,43 @@ void setup(){
     Serial.println("WiFi connected.");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+    return;
+  } else {
+    Serial.println("WiFi connect process time out.");
+  }
+
+  // 繰り返し、今度はssid_2を使う
+  // ! ToDo 関数化する
+  connect_try_count = 0;
+  Serial.print("ssid_2 = ");
+  Serial.print(preferences.getString("ssid_2", ""));
+  Serial.print(", pass2 = ");
+  Serial.println(preferences.getString("pass_2", ""));
+  WiFi.begin(preferences.getString("ssid_2", "").c_str(), preferences.getString("pass_2", "").c_str());
+
+  while (WiFi.status() != WL_CONNECTED && connect_try_count < MAX_TRY_CONNECT_INI) {
+    delay(500);
+    Serial.print(".");
+    connect_try_count++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {  
+    Serial.println("");
+    Serial.println("WiFi connected.");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+    return;
   } else {
     Serial.println("WiFi connect process time out.");
   }
 }
 
 void loop(){
-  //static int main_state = MAIN_STATE_DEFAULT;
-  // 天気情報通知間隔設定用変数
-  static int count_for_inform_weather = 0;
-  static const int count_to_flush_inform_weather = 1; //debug 
-  //static const int count_to_flush_inform_weather = 1800; 
-
   // esp32へのリクエストを処理する
   server.handle_request();
-  /*
-  switch(main_state){
-    case MAIN_STATE_SETTING:
-      break;
-    case MAIN_STATE_INFORM:
-      inform_weather();
-      break;
-    case MAIN_STATE_NONE:
-      break;
-  }
-  */
+
   // ループ回数が規定値を超えるごとに天気情報通知
-  if(count_for_inform_weather >= count_to_flush_inform_weather){
+  if(count_for_inform_weather >= COUNT_FLASH_WEATHER){
     // 天気情報通知処理
     inform_weather();
     // ループ回数を初期化
@@ -128,8 +144,6 @@ void set_server(){
   // htmlファイル読み込み用変数
   File html_file;
   size_t size;
-  //const char* soft_ap_ssid     = "weather_bot";                 // ソフトAPのssid
-  //const char* soft_ap_password = "esp32esp";                    // ソフトAPのパスワード
 
   // esp32に記憶させてあるhtmlファイルを読み込んでいく
   // index.htmlを読み込む
@@ -161,7 +175,8 @@ void set_server(){
   server.add_handler("/", handle_root);
   server.add_handler("/access.html", handle_access);
   server.add_handler("/setinfo.html", handle_setinfo);
-  server.add_handler_post("/access.html", handle_access_post); 
+  server.add_handler_post("/access.html", handle_access_post);
+  server.add_handler_post("/setinfo.html", handle_setinfo_post); 
   server.begin();
 }
 
@@ -205,20 +220,58 @@ void handle_access_post(String query){
     connect_try_count++;
   }
 
-  if (WiFi.status() == WL_CONNECTED) {  
+  if (WiFi.status() == WL_CONNECTED) {
     Serial.println("");
     Serial.println("WiFi connected.");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
 
     // 接続成功したssid、passwordを覚えておく
-    preferences.putString("ssid", map_query["ssid"]);
-    preferences.putString("pass", map_query["password"]);
-    Serial.println("Stored SSID + PASSWORD in nonvolatile storage.");
+    int num_saved_id = preferences.getInt("num_saved_id", 0);
+    Serial.print("num_saved_id = ");
+    Serial.println(num_saved_id);
+    if(num_saved_id >= 2){
+      num_saved_id = 0;
+      preferences.putInt("num_saved_id", 0);
+      Serial.println("reset num_saved_id -> 0");
+    }
+    if(num_saved_id == 0){
+      preferences.putString("ssid_1", map_query["ssid"]);
+      preferences.putString("pass_1", map_query["password"]);
+      preferences.putInt("num_saved_id", num_saved_id + 1);
+      Serial.println("Stored SSID + PASSWORD in storage 1.");
+    }else if(num_saved_id == 1){
+      preferences.putString("ssid_2", map_query["ssid"]);
+      preferences.putString("pass_2", map_query["password"]);
+      preferences.putInt("num_saved_id", num_saved_id + 1);
+      Serial.println("Stored SSID + PASSWORD in storage 2.");
+    }
+
+    // 天気情報通知間隔設定用変数をリセット（即時に天気通知処理に入るため）
+    count_for_inform_weather = COUNT_FLASH_WEATHER;
   } else {
     Serial.println("WiFi connect process time out.");
   } 
   
+  server.send_html(200, (char *)success_html);
+}
+
+// POST /setinfo.html
+void handle_setinfo_post(String query){
+  std::map<String, String> map_query;
+
+  // クエリの解析
+  analyze_query(query, map_query);
+  Serial.print("region = ");
+  Serial.print(map_query["region"]);
+  Serial.print(", time = ");
+  Serial.println(map_query["time"]);
+
+  city = map_query["region"];
+  time_number_inform_weather = map_query["time"].toInt() / 3;
+  
+  // 天気情報通知間隔設定用変数をリセット（即時に天気通知処理に入るため）
+  count_for_inform_weather = COUNT_FLASH_WEATHER;
   server.send_html(200, (char *)success_html);
 }
 
@@ -261,12 +314,9 @@ void analyze_query(String query, std::map<String, String> &map_query){
 // 天気通知処理
 /*-------------------------------------------------*/
 void inform_weather(){
-  //const char* host      = "numereal.sakura.ne.jp";              // 天気情報を置いてあるサーバ名
-  const char* host      = "api.openweathermap.org";              // 天気情報を置いてあるサーバ名
-  const char* appid     = "c99b756e06c878e45313fd8edc51a819";   // OpenWeatherMapで登録したAPPID
-  const char* city      = "Nagoya";                             // 都市を選択
-  const char* country   = "jp";                                 // 国を選択
-  int time_number_inform_weather = 0;                           // 何時間後の天気を通知するか
+  const char* host      = "api.openweathermap.org";     // 天気情報を置いてあるサーバ名
+  const char* appid     = "put-your-appid";             // OpenWeatherMapで登録したAPPID
+  const char* country   = "jp";                         // 国を選択
   String weather[NUM_GET_WEATHER];
 
   Serial.print("connecting to ");
@@ -279,7 +329,6 @@ void inform_weather(){
     return;
   }
 
-  //String url = "/sample/esp-wroom-02/weather.php";
   // 叩くurlの設定
   String url = "/data/2.5/forecast";
   url += "?q=";

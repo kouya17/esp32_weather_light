@@ -25,4 +25,4 @@ IO4 : green led (snowy)
 (5) Set SSID and password of your Wi-Fi router.  
 (6) If you need to set area or forecast time, click the button "通知情報設定" and set them.  
 <img src="https://github.com/kouya17/esp32_weather_light/blob/master/doc/setinfo.png" width="300px">  
-(7) Complete!  
+(7) Complete!

@@ -16,3 +16,11 @@ IO23 : blue led
 IO4 : green led
 
 ## How to use
+1. Upload this program to your ESP32
+2. Connect to SSID of your ESP32(default "ESP32AP")
+3. Open the browser and access to IP Adress of your ESP32(default 192.168.4.1)
+![index.png](https://github.com/kouya17/esp32_weather_light/blob/master/doc/index.png)
+4. Click the button "AP設定"
+5. Set SSID and password of your Wi-Fi router
+6. If you need to set area or forecast time, click the button "通知情報設定" and set them
+7. Complete!

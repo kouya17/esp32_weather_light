@@ -10,10 +10,10 @@ Use weather API : <a href="https://openweathermap.org/">https://openweathermap.o
 - LEDs
 
 ## Pin assignment
-IO25 : white led  
-IO26 : red led  
-IO23 : blue led  
-IO4 : green led
+IO25 : white led (cloudy)  
+IO26 : red led (sunny)  
+IO23 : blue led (rainy)  
+IO4 : green led (snowy)  
 
 ## How to use
 (1) Upload this program to your ESP32.  
